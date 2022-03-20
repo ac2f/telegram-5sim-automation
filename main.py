@@ -1,11 +1,13 @@
 from email import header
-import time
 from faker import Faker
 from telethon.sync import *
 from telethon.errors.rpcerrorlist import *
-from colorama import Fore, init
+from colorama import Fore, init, Style
 from requests import Request, Response
 import random, requests, datetime
+import os
+import time
+import shutil
 init(autoreset=True);
 config:dict = {
     "api_id": "2392599",
@@ -66,25 +68,38 @@ class M5sim:
                 print(f"> {Fore.LIGHTCYAN_EX}{item}  {' ' * (17 - len(str(item)))}:  {Fore.LIGHTRED_EX}{data[item][list(data[item])[0]] if type(data[item]) == dict else data[item]}")
         return data; 
     
-    def purchase(self, country:str, operator:str = "any", product:str = "telegram") -> dict:
-        return self.sendRequest(self.urlWithPath("purchase").format(country=country, operator=operator, product=product), "GET", headers=self.headersTemplate).json();
-    
+    def purchase(self, country:str, operator:str = "any", product:str = "telegram") -> dict | str:
+        try:
+            data:dict = self.sendRequest(self.urlWithPath("purchase").format(country=country, operator=operator, product=product), "GET", headers=self.headersTemplate).json();
+            self.lastPurchaseID = data["id"];
+            return data; 
+        except Exception as e:
+            return e;
+
     def cancelPurchase(self, id:str|int) -> dict:
         return self.sendRequest(self.urlWithPath("cancelPurchase").format(id=id), "GET", headers=self.headersTemplate).json();
 
     def purchaseData(self, id:str|int) -> dict:
         return self.sendRequest(self.urlWithPath("purchaseData").format(id=id), "GET", headers=self.headersTemplate).json();
 
-m5sim = M5sim("");
+m5sim = M5sim("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2NzgzODYxMzcsImlhdCI6MTY0Njg1MDEzNywicmF5IjoiZjcxZGM0NjZlYWMwYjIyMjg3NjJmMTA2MWI1MWQ2YzQiLCJzdWIiOjc3NzI5M30.nDv9JXocsjkiwLHFjraXgYfX_9GYtDSN5RLnfVHhqFCkr2G2XrYO7p3IeYmIDt4LihIqFUpSyS52lbK9sJBJ4kwih-R2N4x03zpIeXqgwk3-fG7tz0EFZCI5gNq9GGqrFyCO0SM825XgdFkhHLh_vYDd6_TpYzxs8BU8T3BDLErZ_pGmtqRpRfXcOb9yaNmX74-GadhOmkOcEUbwAQxnKDS0e1tX9srkn-4T3shaMs4ISwV7DFRwBl4snAkL__yzTSgFkP0JhkWOsfKjvokm8Lh3TtVTg0BWjPR477VMy8qtnQMpnoZVLFhp6h7HalE1nAxk5tu_PV88BvDh0f2DNA");
 class Actions:
     def __init__(self):
-        m5sim.aboutMe(logMode=True)
+        for file in os.listdir("sessions"):
+            os.remove(f"sessions/{file}");
+        m5sim.aboutMe(logMode=True);
         self.initializeModel1();
 
     def initializeModel1(self):
         while True:
             pref:dict = random.choice(purchasePrefences);
-            phone:str = m5sim.purchase(pref["name"], pref["operator"], pref["product"])["phone"];
+            print(f"Buying a \"{Fore.LIGHTCYAN_EX}{pref['product']}{Fore.RESET}\" item from \"{Fore.LIGHTCYAN_EX}{pref['country']}{Fore.RESET}\" country.");
+            buyData:dict = m5sim.purchase(pref["country"], pref["operator"], pref["product"])
+            if (type(buyData) == requests.exceptions.JSONDecodeError):
+                self.printException("Encountered while purchasing. Error", buyData);
+                continue;
+            phone:str = buyData["phone"];
+            print(f"Successfully bought \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\" from \"{Fore.LIGHTCYAN_EX}{pref['country']}{Fore.RESET}\" for \"{Fore.LIGHTMAGENTA_EX}{buyData['price']}{Fore.RESET}\" ruble(s)")
             client = TelegramClient(config["sessions_path"].format(phone), api_id=config["api_id"], api_hash=config["api_hash"]);
             client.connect();
             if not client.is_user_authorized():
@@ -93,11 +108,13 @@ class Actions:
                     code = self.waitForCode();
                     if (code == -1):
                         continue;
-                    me = client.sign_up(phone=phone, code=code, first_name=actions.generateRandomUser());
+                    client.sign_up(phone=phone, code=code, first_name=actions.generateRandomUser());
+                    print(f"{Fore.LIGHTGREEN_EX}Successfully registered with using \"{Fore.WHITE}{phone}{Fore.LIGHTGREEN_EX}\"");
+                    shutil.copy(config["sessions_path"].format(phone)+".session", "verified-sessions/");
+                    client.disconnect();
                 except (PhoneNumberBannedError, Exception) as e:
-                    self.printException();
+                    self.printException(f"Error \"{phone}\"", e);
                     self.cancelPurchase();
-                    continue;
 
     def currentTime(self) -> float | int:
         return datetime.datetime.now().timestamp();
@@ -108,7 +125,7 @@ class Actions:
         initTime:float = self.currentTime(); 
         while True:
             data:dict = m5sim.purchaseData(m5sim.lastPurchaseID);
-            if (type(data["sms"])==list):
+            if (len(data["sms"]) > 0):
                 code = data["sms"][0]["code"];
                 break;
             if (self.currentTime()-initTime < config["code"]["delay"] and tried < config["code"]["tries"]):

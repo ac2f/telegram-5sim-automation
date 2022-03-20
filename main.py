@@ -38,6 +38,8 @@ purchasePrefences:dict = [
 
 class M5sim:
     def __init__(self, apiKey:str, url:str = "https://5sim.net"):
+        if(apiKey == "" or apiKey == None or len(apiKey)<499):
+            raise ValueError("Invalid \"apiKey\"");
         self.url = url;
         self.apiKey = apiKey;
         self.path = {

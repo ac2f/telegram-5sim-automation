@@ -75,7 +75,7 @@ class M5sim:
     def purchaseData(self, id:str|int) -> dict:
         return self.sendRequest(self.urlWithPath("purchaseData").format(id=id), "GET", headers=self.headersTemplate).json();
 
-m5sim = M5sim("");
+m5sim = M5sim("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2NzgzODYxMzcsImlhdCI6MTY0Njg1MDEzNywicmF5IjoiZjcxZGM0NjZlYWMwYjIyMjg3NjJmMTA2MWI1MWQ2YzQiLCJzdWIiOjc3NzI5M30.nDv9JXocsjkiwLHFjraXgYfX_9GYtDSN5RLnfVHhqFCkr2G2XrYO7p3IeYmIDt4LihIqFUpSyS52lbK9sJBJ4kwih-R2N4x03zpIeXqgwk3-fG7tz0EFZCI5gNq9GGqrFyCO0SM825XgdFkhHLh_vYDd6_TpYzxs8BU8T3BDLErZ_pGmtqRpRfXcOb9yaNmX74-GadhOmkOcEUbwAQxnKDS0e1tX9srkn-4T3shaMs4ISwV7DFRwBl4snAkL__yzTSgFkP0JhkWOsfKjvokm8Lh3TtVTg0BWjPR477VMy8qtnQMpnoZVLFhp6h7HalE1nAxk5tu_PV88BvDh0f2DNA");
 class Actions:
     def __init__(self):
         m5sim.aboutMe(logMode=True)
@@ -102,17 +102,18 @@ class Actions:
     def currentTime(self) -> float | int:
         return datetime.datetime.now().timestamp();
     
-    def waitForCode(self, id:str|int) -> int:
-        code:int = -1;
+    def waitForCode(self) -> int:
+        code:int|str = -1;
         tried:int = 0;
         initTime:float = self.currentTime(); 
         while True:
-            data:dict = m5sim.purchaseData(id);
+            data:dict = m5sim.purchaseData(m5sim.lastPurchaseID);
             if (type(data["sms"])==list):
                 code = data["sms"][0]["code"];
                 break;
             if (self.currentTime()-initTime < config["code"]["delay"] and tried < config["code"]["tries"]):
                 self.cancelPurchase();
+                break;
             tried += 1;
             time.sleep(config["code"]["delay"]);
         return code;

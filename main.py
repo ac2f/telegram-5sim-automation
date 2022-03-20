@@ -10,6 +10,9 @@ import time
 import shutil
 init(autoreset=True);
 config:dict = {
+    "5sim": {
+        "apiKey": ""
+    },
     "api_id": "2392599",
     "api_hash": "7e14b38d250953c8c1e94fd7b2d63550",
     "phone_numbers": [
@@ -84,7 +87,7 @@ class M5sim:
     def purchaseData(self, id:str|int) -> dict:
         return self.sendRequest(self.urlWithPath("purchaseData").format(id=id), "GET", headers=self.headersTemplate).json();
 
-m5sim = M5sim("");
+m5sim = M5sim(config["5sim"]["apiKey"]);
 class Actions:
     def __init__(self):
         for file in os.listdir("sessions"):

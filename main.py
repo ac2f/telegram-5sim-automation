@@ -19,16 +19,22 @@ config:dict = {
         # "+50493609809"
     ],
     "sessions_path": "sessions/{0}",
+    "delayBeforeRetry": 10,
     "code": {
         "delay": 5,
         "tries": 3
-    }
+    },
+    "outfile": "verified-phones.txt"
 };
 
 preferredCountries = [
     "russia", 
     "congo", 
-    "indonesia"
+    "indonesia",
+    "bulgaria",
+    "india",
+    "indonesia",
+    "egypt"
 ];
 
 purchasePrefences:dict = [
@@ -116,10 +122,13 @@ class Actions:
                     client.sign_up(phone=phone, code=code, first_name=actions.generateRandomUser());
                     print(f"{Fore.LIGHTGREEN_EX}Successfully registered with using \"{Fore.WHITE}{phone}{Fore.LIGHTGREEN_EX}\"");
                     shutil.copy(config["sessions_path"].format(phone)+".session", "verified-sessions/");
+                    self.appendDataToFile(phone);
                     client.disconnect();
                 except (PhoneNumberBannedError, Exception) as e:
+                    print(f"{Fore.LIGHTBLUE_EX}Cancelling purchase \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\"{Fore.LIGHTBLUE_EX}. Purchase ID: \"{Fore.RESET}{buyData['id']}{Fore.LIGHTBLUE_EX}\"");
                     self.printException(f"Error \"{phone}\"", e);
                     self.cancelPurchase();
+            time.sleep(config["delayBeforeRetry"]);
 
     def currentTime(self) -> float | int:
         return datetime.datetime.now().timestamp();
@@ -148,6 +157,11 @@ class Actions:
     
     def generateRandomUser(self) -> str:
         return Faker().name().replace(" ", "") + str(random.randint(10000, 99999))
+    
+    def appendDataToFile(self, data:str):
+        with open(config["outfile"], "a+", encoding="utf-8") as f:
+            f.write(data + "\n");
+            f.close();
 
 actions = Actions();
 

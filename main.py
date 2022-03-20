@@ -7,8 +7,6 @@ from colorama import Fore, init
 from requests import Request, Response
 import random, requests, datetime
 init(autoreset=True);
-url = "https://www.binance.com/tr/support/announcement/c-48";
-delay = 60; # Seconds
 config:dict = {
     "api_id": "2392599",
     "api_hash": "7e14b38d250953c8c1e94fd7b2d63550",
@@ -92,7 +90,10 @@ class Actions:
             if not client.is_user_authorized():
                 try:
                     client.send_code_request(phone);
-                    me = client.sign_up(phone=phone, code=input(f'Enter the code that has sent to {phone}: '), first_name=actions.generateRandomUser());
+                    code = self.waitForCode();
+                    if (code == -1):
+                        continue;
+                    me = client.sign_up(phone=phone, code=code, first_name=actions.generateRandomUser());
                 except (PhoneNumberBannedError, Exception) as e:
                     self.printException();
                     self.cancelPurchase();
@@ -102,13 +103,14 @@ class Actions:
         return datetime.datetime.now().timestamp();
     
     def waitForCode(self, id:str|int) -> int:
-        code:int = 0;
+        code:int = -1;
         tried:int = 0;
         initTime:float = self.currentTime(); 
         while True:
-            data:dict = m5sim.purchaseData()
-            if ():
-                return 
+            data:dict = m5sim.purchaseData(id);
+            if (type(data["sms"])==list):
+                code = data["sms"][0]["code"];
+                break;
             if (self.currentTime()-initTime < config["code"]["delay"] and tried < config["code"]["tries"]):
                 self.cancelPurchase();
             tried += 1;

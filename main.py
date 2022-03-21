@@ -11,30 +11,29 @@ import shutil
 init(autoreset=True);
 config:dict = {
     "5sim": {
-        "apiKey": ""
+        "apiKey": "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2NzgzODYxMzcsImlhdCI6MTY0Njg1MDEzNywicmF5IjoiZjcxZGM0NjZlYWMwYjIyMjg3NjJmMTA2MWI1MWQ2YzQiLCJzdWIiOjc3NzI5M30.nDv9JXocsjkiwLHFjraXgYfX_9GYtDSN5RLnfVHhqFCkr2G2XrYO7p3IeYmIDt4LihIqFUpSyS52lbK9sJBJ4kwih-R2N4x03zpIeXqgwk3-fG7tz0EFZCI5gNq9GGqrFyCO0SM825XgdFkhHLh_vYDd6_TpYzxs8BU8T3BDLErZ_pGmtqRpRfXcOb9yaNmX74-GadhOmkOcEUbwAQxnKDS0e1tX9srkn-4T3shaMs4ISwV7DFRwBl4snAkL__yzTSgFkP0JhkWOsfKjvokm8Lh3TtVTg0BWjPR477VMy8qtnQMpnoZVLFhp6h7HalE1nAxk5tu_PV88BvDh0f2DNA"
     },
     "api_id": "2392599",
     "api_hash": "7e14b38d250953c8c1e94fd7b2d63550",
-    "phone_numbers": [
-        # "+50493609809"
-    ],
     "sessions_path": "sessions/{0}",
     "delayBeforeRetry": 10,
+    "retryDelayWhenError": 5,
     "code": {
-        "delay": 5,
-        "tries": 3
+        "delay": 10,
+        "tries": 5
     },
     "outfile": "verified-phones.txt"
 };
 
 preferredCountries = [
-    "russia", 
-    "congo", 
-    "indonesia",
-    "bulgaria",
-    "india",
-    "indonesia",
-    "egypt"
+    "any"
+    # "russia", 
+    # "congo", 
+    # "indonesia",
+    # "bulgaria",
+    # "india",
+    # "indonesia",
+    # "egypt"
 ];
 
 purchasePrefences:dict = [
@@ -80,18 +79,35 @@ class M5sim:
         return data; 
     
     def purchase(self, country:str, operator:str = "any", product:str = "telegram") -> dict | str:
+        data:dict = self.sendRequest(self.urlWithPath("purchase").format(country=country, operator=operator, product=product), "GET", headers=self.headersTemplate);
         try:
-            data:dict = self.sendRequest(self.urlWithPath("purchase").format(country=country, operator=operator, product=product), "GET", headers=self.headersTemplate).json();
+            data = data.json();
             self.lastPurchaseID = data["id"];
-            return data; 
+            return data;
         except Exception as e:
-            return e;
+            if ("no free phones" in str(e)):
+                raise e;
+            print(f"Retrying cause of {Fore.LIGHTRED_EX}{e}{Fore.RESET}\nDELAY: {config['retryDelayWhenError']} seconds");
+            time.sleep(config["retryDelayWhenError"]);
+            return self.purchase(country=country, operator=operator, product=product);
 
     def cancelPurchase(self, id:str|int) -> dict:
-        return self.sendRequest(self.urlWithPath("cancelPurchase").format(id=id), "GET", headers=self.headersTemplate).json();
+        data = self.sendRequest(self.urlWithPath("cancelPurchase").format(id=id), "GET", headers=self.headersTemplate);
+        try:
+            return data.json();
+        except Exception as e:
+            print(f"Retrying cause of {Fore.LIGHTRED_EX}{e}{Fore.RESET}\nDELAY: {config['retryDelayWhenError']} seconds");
+            time.sleep(config["retryDelayWhenError"]);
+            return self.cancelPurchase(id);
 
     def purchaseData(self, id:str|int) -> dict:
-        return self.sendRequest(self.urlWithPath("purchaseData").format(id=id), "GET", headers=self.headersTemplate).json();
+        data = self.sendRequest(self.urlWithPath("purchaseData").format(id=id), "GET", headers=self.headersTemplate);
+        try:
+            return data.json();
+        except Exception as e:
+            print(f"Retrying cause of {Fore.LIGHTRED_EX}{e}{Fore.RESET}\nDELAY: {config['retryDelayWhenError']} seconds");
+            time.sleep(config["retryDelayWhenError"]);
+            return self.purchaseData(id);
 
 m5sim = M5sim(config["5sim"]["apiKey"]);
 class Actions:
@@ -105,30 +121,33 @@ class Actions:
         while True:
             pref:dict = random.choice(purchasePrefences);
             print(f"Buying a \"{Fore.LIGHTCYAN_EX}{pref['product']}{Fore.RESET}\" item from \"{Fore.LIGHTCYAN_EX}{pref['country']}{Fore.RESET}\" country.");
-            buyData:dict = m5sim.purchase(pref["country"], pref["operator"], pref["product"])
-            if (type(buyData) == requests.exceptions.JSONDecodeError):
-                self.printException("Encountered while purchasing. Error", buyData);
-                continue;
-            phone:str = buyData["phone"];
-            print(f"Successfully bought \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\" from \"{Fore.LIGHTCYAN_EX}{pref['country']}{Fore.RESET}\" for \"{Fore.LIGHTMAGENTA_EX}{buyData['price']}{Fore.RESET}\" ruble(s)")
-            client = TelegramClient(config["sessions_path"].format(phone), api_id=config["api_id"], api_hash=config["api_hash"]);
-            client.connect();
-            if not client.is_user_authorized():
-                try:
-                    client.send_code_request(phone);
-                    code = self.waitForCode();
-                    if (code == -1):
-                        continue;
-                    client.sign_up(phone=phone, code=code, first_name=actions.generateRandomUser());
-                    print(f"{Fore.LIGHTGREEN_EX}Successfully registered with using \"{Fore.WHITE}{phone}{Fore.LIGHTGREEN_EX}\"");
-                    shutil.copy(config["sessions_path"].format(phone)+".session", "verified-sessions/");
-                    self.appendDataToFile(phone);
-                    client.disconnect();
-                except (PhoneNumberBannedError, Exception) as e:
-                    print(f"{Fore.LIGHTBLUE_EX}Cancelling purchase \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\"{Fore.LIGHTBLUE_EX}. Purchase ID: \"{Fore.RESET}{buyData['id']}{Fore.LIGHTBLUE_EX}\"");
-                    self.printException(f"Error \"{phone}\"", e);
-                    self.cancelPurchase();
-            time.sleep(config["delayBeforeRetry"]);
+            try:
+                buyData:dict = m5sim.purchase(pref["country"], pref["operator"], pref["product"])
+                if (type(buyData) == requests.exceptions.JSONDecodeError):
+                    self.printException("Encountered while purchasing. Error", buyData);
+                    continue;
+                phone:str = buyData["phone"];
+                print(f"Successfully bought \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\" from \"{Fore.LIGHTCYAN_EX}{pref['country']}{Fore.RESET}\" for \"{Fore.LIGHTMAGENTA_EX}{buyData['price']}{Fore.RESET}\" ruble(s)")
+                client = TelegramClient(config["sessions_path"].format(phone), api_id=config["api_id"], api_hash=config["api_hash"]);
+                client.connect();
+                if not client.is_user_authorized():
+                    try:
+                        client.send_code_request(phone);
+                        code = self.waitForCode();
+                        if (code == -1):
+                            continue;
+                        client.sign_up(phone=phone, code=code, first_name=self.generateRandomUser());
+                        print(f"{Fore.LIGHTGREEN_EX}Successfully registered with using \"{Fore.WHITE}{phone}{Fore.LIGHTGREEN_EX}\"");
+                        shutil.copy(config["sessions_path"].format(phone)+".session", "verified-sessions/");
+                        self.appendDataToFile(phone);
+                        client.disconnect();
+                    except (PhoneNumberBannedError, Exception) as e:
+                        print(f"{Fore.LIGHTYELLOW_EX}Cancelling purchase \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\"{Fore.LIGHTYELLOW_EX}. Purchase ID: \"{Fore.RESET}{buyData['id']}{Fore.LIGHTYELLOW_EX}\"");
+                        self.printException(f"Error \"{phone}\"", e);
+                        self.cancelPurchase();
+                time.sleep(config["delayBeforeRetry"]);
+            except Exception as e:
+                self.printException("Error: ", e);
 
     def currentTime(self) -> float | int:
         return datetime.datetime.now().timestamp();
@@ -139,10 +158,13 @@ class Actions:
         initTime:float = self.currentTime(); 
         while True:
             data:dict = m5sim.purchaseData(m5sim.lastPurchaseID);
+            print(f"Waiting for code to be received..");
             if (len(data["sms"]) > 0):
+                print(f"{Fore.LIGHTGREEN_EX}Code received!");
                 code = data["sms"][0]["code"];
                 break;
-            if (self.currentTime()-initTime < config["code"]["delay"] and tried < config["code"]["tries"]):
+            if (self.currentTime()-initTime > config["code"]["delay"] and tried > config["code"]["tries"]):
+                print(f"{Fore.LIGHTRED_EX}Max wait time exceeded! Cancelling purchase..");
                 self.cancelPurchase();
                 break;
             tried += 1;
@@ -154,7 +176,7 @@ class Actions:
 
     def cancelPurchase(self):
         m5sim.cancelPurchase(m5sim.lastPurchaseID);
-    
+        print(f"{Fore.LIGHTYELLOW_EX}Successfully cancelled purchase");
     def generateRandomUser(self) -> str:
         return Faker().name().replace(" ", "") + str(random.randint(10000, 99999))
     

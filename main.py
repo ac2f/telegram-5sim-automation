@@ -1,6 +1,6 @@
 from email import header
 from faker import Faker
-from telethon.sync import *
+from telethon.sync import TelegramClient, events;
 from telethon.errors.rpcerrorlist import *
 from colorama import Fore, init, Style
 from requests import Request, Response
@@ -15,25 +15,31 @@ config:dict = {
     },
     "api_id": "2392599",
     "api_hash": "7e14b38d250953c8c1e94fd7b2d63550",
-    "sessions_path": "sessions/{0}",
+    "register_sessions_path": "registered_sessions/{0}",
+    "login_sessions_path": "loggingin_sessions/{0}",
+    "verified_sessions_path": "C:\\Users\\user\\Desktop\\HawkTelegramBot\\HawkTelegramBotSourcePrivate\\sessions\\{0}",
     "delayBeforeRetry": 10,
     "retryDelayWhenError": 5,
     "code": {
         "delay": 10,
         "tries": 5
     },
-    "outfile": "verified-phones.txt"
+    "outfile": "C:\\Users\\user\\Desktop\\HawkTelegramBot\\HawkTelegramBotSourcePrivate\\phone.csv"
 };
 
 preferredCountries = [
-    "any"
-    # "russia", 
-    # "congo", 
-    # "indonesia",
-    # "bulgaria",
-    # "india",
-    # "indonesia",
-    # "egypt"
+    "turkey",
+    "russia", 
+    "congo",
+    "indonesia",
+    "bulgaria",
+    "india",
+    "indonesia",
+    "egypt",
+    "cyprus",
+    "venezuela",
+    "uganda",
+    "malawi"
 ];
 
 purchasePrefences:dict = [
@@ -112,8 +118,8 @@ class M5sim:
 m5sim = M5sim(config["5sim"]["apiKey"]);
 class Actions:
     def __init__(self):
-        for file in os.listdir("sessions"):
-            os.remove(f"sessions/{file}");
+        for file in os.listdir(config["register_sessions_path"].format("")):
+            os.remove(config["register_sessions_path"].format(file));
         m5sim.aboutMe(logMode=True);
         self.initializeModel1();
 
@@ -128,7 +134,8 @@ class Actions:
                     continue;
                 phone:str = buyData["phone"];
                 print(f"Successfully bought \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\" from \"{Fore.LIGHTCYAN_EX}{pref['country']}{Fore.RESET}\" for \"{Fore.LIGHTMAGENTA_EX}{buyData['price']}{Fore.RESET}\" ruble(s)")
-                client = TelegramClient(config["sessions_path"].format(phone), api_id=config["api_id"], api_hash=config["api_hash"]);
+                client = TelegramClient(config["register_sessions_path"].format(phone), api_id=config["api_id"], api_hash=config["api_hash"]);
+                print(f"{Fore.LIGHTYELLOW_EX}The phone number \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}{Fore.LIGHTYELLOW_EX}\" is available. Waiting for code to be received..");
                 client.connect();
                 if not client.is_user_authorized():
                     try:
@@ -138,13 +145,20 @@ class Actions:
                             continue;
                         client.sign_up(phone=phone, code=code, first_name=self.generateRandomUser());
                         print(f"{Fore.LIGHTGREEN_EX}Successfully registered with using \"{Fore.WHITE}{phone}{Fore.LIGHTGREEN_EX}\"");
-                        shutil.copy(config["sessions_path"].format(phone)+".session", "verified-sessions/");
-                        self.appendDataToFile(phone);
-                        client.disconnect();
+                        client.session.save_entities = True;
+                        client.session.save();
+                        shutil.copy(config["register_sessions_path"].format(phone)+".session", config["verified_sessions_path"].format(phone.replace("+", ""))+".session");
+                        print(f"{Fore.LIGHTGREEN_EX}Successfully registered and signed in. Session file can be found at \"{Fore.LIGHTMAGENTA_EX}{config['verified_sessions_path'].format(phone)}.session{Fore.LIGHTGREEN_EX}\"")
+                        self.appendDataToFile(phone); 
+                    except FileNotFoundError as e:
+                        self.printException("", e)
+                        continue;
                     except (PhoneNumberBannedError, Exception) as e:
                         print(f"{Fore.LIGHTYELLOW_EX}Cancelling purchase \"{Fore.LIGHTGREEN_EX}{phone}{Fore.RESET}\"{Fore.LIGHTYELLOW_EX}. Purchase ID: \"{Fore.RESET}{buyData['id']}{Fore.LIGHTYELLOW_EX}\"");
                         self.printException(f"Error \"{phone}\"", e);
                         self.cancelPurchase();
+                client.disconnect();
+
                 time.sleep(config["delayBeforeRetry"]);
             except Exception as e:
                 self.printException("Error: ", e);
@@ -152,16 +166,16 @@ class Actions:
     def currentTime(self) -> float | int:
         return datetime.datetime.now().timestamp();
     
-    def waitForCode(self) -> int:
+    def waitForCode(self, smsIndex:int = 0) -> int:
         code:int|str = -1;
         tried:int = 0;
         initTime:float = self.currentTime(); 
         while True:
             data:dict = m5sim.purchaseData(m5sim.lastPurchaseID);
             print(f"Waiting for code to be received..");
-            if (len(data["sms"]) > 0):
+            if (len(data["sms"]) > smsIndex):
                 print(f"{Fore.LIGHTGREEN_EX}Code received!");
-                code = data["sms"][0]["code"];
+                code = data["sms"][smsIndex]["code"];
                 break;
             if (self.currentTime()-initTime > config["code"]["delay"] and tried > config["code"]["tries"]):
                 print(f"{Fore.LIGHTRED_EX}Max wait time exceeded! Cancelling purchase..");

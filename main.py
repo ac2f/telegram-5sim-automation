@@ -148,7 +148,7 @@ class Actions:
                         client.session.save_entities = True;
                         client.session.save();
                         shutil.copy(config["register_sessions_path"].format(phone)+".session", config["verified_sessions_path"].format(phone.replace("+", ""))+".session");
-                        print(f"{Fore.LIGHTGREEN_EX}Successfully registered and signed in. Session file can be found at \"{Fore.LIGHTMAGENTA_EX}{config['verified_sessions_path'].format(phone)}.session{Fore.LIGHTGREEN_EX}\"")
+                        print(f"{Fore.LIGHTGREEN_EX}Successfully registered and signed in. Session file can be found at \"{Fore.LIGHTMAGENTA_EX}{config['verified_sessions_path'].format(phone.replace('+', ''))}.session{Fore.LIGHTGREEN_EX}\"")
                         self.appendDataToFile(phone); 
                     except FileNotFoundError as e:
                         self.printException("", e)
@@ -196,7 +196,7 @@ class Actions:
     
     def appendDataToFile(self, data:str):
         with open(config["outfile"], "a+", encoding="utf-8") as f:
-            f.write(data + "\n");
+            f.write("\n"+data);
             f.close();
 
 actions = Actions();
